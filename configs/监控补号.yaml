@@ -1,0 +1,146 @@
+# 监控补号模式 - 华医通
+name: "监控补号"
+mode: monitor
+description: "晚上8点开始监控医生排班，发现有号立即抢号"
+patient: ""
+department: ""
+doctor: ""
+sct_key: "YOUR_SERVERCHAN_KEY_HERE"
+yunma_token: "YOUR_YUNMA_TOKEN_HERE"
+
+schedule:
+  enter_time: "20:00"
+  target_time: "20:00"
+  night_start: 1
+  night_end: 6
+  refresh_min: 30
+  refresh_max: 180
+  session_timeout: 15
+
+# 恢复流程(超时后重新进入小程序)
+recovery:
+  - action: click
+    x: 358
+    y: 92
+    desc: "点击搜索回到列表"
+  - action: wait
+    desc: "等待加载"
+    timeout: 2
+
+# 挂号成功
+on_success:
+  - action: notify
+    desc: "抢号成功通知"
+    params:
+      title: "监控补号成功!"
+      body: "已抢到号源，请立即支付"
+      urgent: "true"
+
+# 无号时的处理
+on_no_slots:
+  - action: click
+    x: 20
+    y: 40
+    desc: "点击返回按钮"
+
+# 主流程
+steps:
+  - action: recovery
+    desc: "先执行恢复流程确保在正确状态"
+
+  - action: ensure_page
+    desc: "确保在医生列表页"
+    params:
+      target: "list"
+
+  - action: click
+    desc: "点击医生卡片进入详情页"
+    x: 340
+    y: 335
+    wait_after: 2
+
+  - action: ensure_page
+    desc: "确认进入详情页"
+    params:
+      target: "detail"
+
+  - action: check_slots
+    desc: "检查号源"
+    region: [18, 294, 383, 775]
+    keywords: ["预约", "可约", "号源", "余号"]
+    on_found:
+      message: "发现号源!!!"
+      notify_user: true
+      steps:
+        # 点击预约按钮
+        - action: click
+          x: 200
+          y: 310
+          desc: "点击预约按钮"
+          wait_after: 3
+
+        - action: capture
+          desc: "截图验证码页"
+          params:
+            save: "screenshots/captcha.png"
+
+        - action: notify
+          desc: "验证码通知"
+          params:
+            title: "请立即输入验证码"
+            body: "发现号源已点击预约，请在30秒内输入验证码"
+            urgent: "true"
+
+        - action: wait
+          desc: "等待用户输入验证码"
+          timeout: 60
+
+        - action: click
+          x: 200
+          y: 500
+          desc: "点击确认"
+          wait_after: 3
+
+        # 检查错误后重试
+        - action: ocr_check
+          desc: "检查错误提示"
+          region: [50, 200, 350, 400]
+          keywords: ["接口错误", "接口异常", "网络失败", "没有号"]
+          on_found:
+            message: "抢号失败，重试"
+            loop: true
+
+    on_not_found:
+      steps:
+        # 返回列表页重新进入
+        - action: click
+          x: 20
+          y: 40
+          desc: "点击返回退出详情"
+          wait_after: 1
+
+  - action: random_wait
+    desc: "随机等待后重新进入"
+    interval:
+      min: 30
+      max: 180
+
+  - action: goto
+    desc: "循环到ensure_page步骤"
+    params:
+      loop: "先执行恢复流程确保在正确状态"
+
+# 应用配置
+app_config:
+  back_button:
+    x: 20
+    y: 40
+  search_button:
+    x: 358
+    y: 92
+  schedule_region: [18, 294, 383, 775]
+  title_region: [0, 0, 400, 100]
+  miniapp_title: "微信"
+  ocr:
+    language: "chi_sim"
+    psm: 6

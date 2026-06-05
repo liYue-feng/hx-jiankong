@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>华医通助手 - 动森风格</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700&family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --c-primary: #19c8b9; --c-primary-h: #3dd4c6; --c-primary-a: #11a89b; --c-primary-bg: #e6f9f6;
+  --c-success: #6fba2c; --c-success-a: #5a9e1e; --c-warning: #f5c31c;
+  --c-error: #e05a5a; --c-error-a: #c94444;
+  --c-text: #794f27; --c-text2: #9f927d; --c-text-disabled: #c4b89e;
+  --c-border: #aaa69d; --c-bg: #f8f8f0; --c-card: rgb(247,243,223);
+  --c-focus: #ffcc00; --c-switch-on: #86d67a; --c-switch-border: #6fba2c;
+  --ff: 'Nunito','Noto Sans SC','Zen Maru Gothic','PingFang SC','Microsoft YaHei',sans-serif;
+  --r-pill: 50px; --r-base: 18px; --r-lg: 24px;
+  --shadow-btn: 0 5px 0 0 #bdaea0; --shadow-in: 0 3px 0 0 #d4c9b4;
+  --shadow-card: 0 4px 10px rgba(107,92,67,0.42);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--ff);background:var(--c-bg);color:var(--c-text);min-height:100vh;font-weight:500;letter-spacing:.01em;
+  background-image:radial-gradient(ellipse at 20% 50%,rgba(25,200,185,.06) 0%,transparent 50%),radial-gradient(ellipse at 80% 20%,rgba(247,195,28,.04) 0%,transparent 50%),radial-gradient(ellipse at 50% 80%,rgba(111,186,44,.04) 0%,transparent 50%)}
+
+.header{background:linear-gradient(135deg,#7DC395,#5bab7a 40%,#19c8b9);padding:18px 28px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 20px rgba(0,0,0,.12);position:relative;overflow:hidden}
+.header::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent,transparent 30px,rgba(255,255,255,.03) 30px,rgba(255,255,255,.03) 31px)}
+.header h1{font-size:22px;font-weight:800;color:#fff;text-shadow:2px 2px 0 rgba(0,0,0,.15);letter-spacing:.04em;position:relative;z-index:1}
+.header h1::before{content:'🌴 ';font-size:24px}
+
+.status-bar{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.2);padding:8px 18px;border-radius:var(--r-pill);backdrop-filter:blur(4px);position:relative;z-index:1}
+.status-dot{width:12px;height:12px;border-radius:50%;border:2px solid rgba(255,255,255,.6);transition:all .3s ease}
+.status-dot.idle{background:#d9d9d9}
+.status-dot.running{background:var(--c-success);animation:pulse 1.5s infinite;box-shadow:0 0 10px rgba(111,186,44,.6)}
+.status-dot.error{background:var(--c-error)}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.3)}}
+.status-text{color:#fff;font-weight:700;font-size:14px;letter-spacing:.02em}
+
+.container{display:flex;max-width:1400px;margin:20px auto;gap:20px;padding:0 20px}
+.left{flex:0 0 400px;display:flex;flex-direction:column;gap:16px}
+.right{flex:1;display:flex;flex-direction:column;gap:16px}
+
+.card{background:var(--c-card);border-radius:var(--r-lg);box-shadow:var(--shadow-card);border:2px solid rgba(169,166,157,.2);overflow:hidden}
+.card-header{padding:14px 20px;font-size:15px;font-weight:700;color:var(--c-text);border-bottom:2px dashed #e8dcc8;display:flex;align-items:center;gap:8px;letter-spacing:.02em}
+.card-header::before{content:'🍃';font-size:16px}
+.card-body{padding:16px 20px}
+
+.form-group{margin-bottom:14px}
+.form-group:last-child{margin-bottom:0}
+.form-group label{display:block;font-size:13px;font-weight:600;color:var(--c-text2);margin-bottom:5px;letter-spacing:.02em}
+
+.input,select{width:100%;padding:10px 18px;font-family:var(--ff);font-size:14px;font-weight:500;color:var(--c-text);background:#fff;border:2.5px solid var(--c-text-disabled);border-radius:var(--r-pill);box-shadow:var(--shadow-in);outline:none;transition:all .25s ease;letter-spacing:.01em}
+.input:hover,select:hover{border-color:#a89878}
+.input:focus,select:focus{border-color:var(--c-focus);box-shadow:0 0 0 3px rgba(255,204,0,.2),0 3px 0 0 #d4c9b4}
+select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath fill='%23794f27' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;padding-right:36px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:var(--ff);font-weight:700;font-size:14px;white-space:nowrap;cursor:pointer;border:2px solid transparent;border-radius:var(--r-pill);padding:10px 22px;letter-spacing:.03em;transition:all .2s cubic-bezier(.4,0,.2,1);user-select:none;outline:none;text-decoration:none}
+.btn:active:not(:disabled){transform:translateY(2px)}
+.btn-primary{color:var(--c-text);background:var(--c-bg);border-color:var(--c-bg);box-shadow:var(--shadow-btn)}
+.btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 0 0 #bdaea0}
+.btn-primary:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 0 #bdaea0}
+.btn-success{color:#fff;background:var(--c-success);border-color:var(--c-success);box-shadow:0 5px 0 0 var(--c-success-a)}
+.btn-success:hover:not(:disabled){background:#85cc45;transform:translateY(-1px);box-shadow:0 6px 0 0 var(--c-success-a)}
+.btn-success:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 0 var(--c-success-a)}
+.btn-danger{color:#fff;background:var(--c-error);border-color:var(--c-error);box-shadow:0 5px 0 0 var(--c-error-a)}
+.btn-danger:hover:not(:disabled){background:#e87878;transform:translateY(-1px);box-shadow:0 6px 0 0 var(--c-error-a)}
+.btn-danger:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 0 var(--c-error-a)}
+.btn-default{color:var(--c-text);background:var(--c-bg);border-color:var(--c-border);box-shadow:none}
+.btn-default:hover:not(:disabled){color:var(--c-primary);border-color:var(--c-primary);transform:translateY(-1px)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
+.btn-group{display:flex;gap:10px;margin-top:18px}
+
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px dashed #e8dcc8;font-size:13px}
+.info-row:last-child{border-bottom:none}
+.info-label{color:var(--c-text2);font-weight:500}
+.info-value{font-weight:700;color:var(--c-text)}
+.info-value.has-slot{color:var(--c-success);animation:pulse 1s infinite}
+
+.log-container{height:420px;overflow-y:auto;background:#2b2118;color:#d4cfc3;font-family:Consolas,'Courier New',monospace;font-size:12px;padding:12px;border-radius:var(--r-base);border:2px solid #3d3028}
+.log-line{padding:3px 0;border-bottom:1px solid #3d3028;white-space:pre-wrap;word-break:break-all}
+.log-line.warn{color:var(--c-warning)}.log-line.error{color:var(--c-error)}.log-line.success{color:var(--c-success)}.log-line.info{color:var(--c-primary)}
+.log-actions{display:flex;gap:8px;margin-bottom:8px}
+
+.config-editor{width:100%;min-height:300px;font-family:Consolas,'Courier New',monospace;font-size:12px;background:#2b2118;color:#d4cfc3;border:2px solid #3d3028;border-radius:var(--r-base);padding:14px;resize:vertical;outline:none}
+.config-editor:focus{border-color:var(--c-focus)}
+
+::-webkit-scrollbar{width:8px}
+::-webkit-scrollbar-track{background:#2b2118;border-radius:4px}
+::-webkit-scrollbar-thumb{background:#5a4d3d;border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:#7a6d5d}
+
+@media(max-width:900px){.container{flex-direction:column}.left{flex:1}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>华医通自动挂号</h1>
+  <div class="status-bar">
+    <div class="status-dot idle" id="statusDot"></div>
+    <span class="status-text" id="statusText">空闲</span>
+  </div>
+</div>
+
+<div class="container">
+  <div class="left">
+    <div class="card">
+      <div class="card-header">控制面板</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>运行模式</label>
+          <select id="modeSelect">
+            <option value="定点抢号">🎯 定点抢号 (8:00)</option>
+            <option value="监控补号">🔍 监控补号 (持续)</option>
+          </select>
+        </div>
+        <div class="form-group"><label>就诊人姓名</label><input class="input" id="pName" placeholder="就诊人姓名"></div>
+        <div class="form-group"><label>科室</label><input class="input" id="pDept" placeholder="科室名"></div>
+        <div class="form-group"><label>医生姓名</label><input class="input" id="pDoctor" placeholder="医生姓名"></div>
+        <div class="form-group">
+          <label>配置文件</label>
+          <select id="configSelect"></select>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-success" id="btnStart" onclick="startWorkflow()">⭐ 启动</button>
+          <button class="btn btn-danger" id="btnStop" onclick="stopWorkflow()" disabled>⏹ 停止</button>
+          <button class="btn btn-default btn-sm" onclick="debugScreenshot()">📷 截图</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">运行状态</div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-label">状态</span><span class="info-value" id="vState">空闲</span></div>
+        <div class="info-row"><span class="info-label">当前步骤</span><span class="info-value" id="vStep">-</span></div>
+        <div class="info-row"><span class="info-label">运行时间</span><span class="info-value" id="vUptime">-</span></div>
+        <div class="info-row"><span class="info-label">号源状态</span><span class="info-value" id="vSlot">-</span></div>
+        <div class="info-row"><span class="info-label">窗口</span><span class="info-value" id="vWindow">-</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="card" style="flex:1;display:flex;flex-direction:column;">
+      <div class="card-header">
+        <span style="flex:1">运行日志</span>
+        <button class="btn btn-default btn-sm" onclick="clearLogs()">🗑</button>
+        <button class="btn btn-default btn-sm" id="btnConfig" onclick="toggleConfig()">⚙</button>
+      </div>
+      <div class="card-body" style="flex:1;padding:8px;">
+        <div class="log-container" id="logContainer"></div>
+      </div>
+    </div>
+
+    <div class="card" id="configCard" style="display:none;">
+      <div class="card-header">
+        <span style="flex:1">配置编辑器</span>
+        <button class="btn btn-default btn-sm" onclick="loadConfigContent()">📂 加载</button>
+        <button class="btn btn-success btn-sm" onclick="saveConfigContent()">💾 保存</button>
+        <button class="btn btn-default btn-sm" onclick="toggleConfig()">✖</button>
+      </div>
+      <div class="card-body">
+        <textarea class="config-editor" id="configEditor"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let isRunning = false;
+let pollTimer = null;
+
+async function init() {
+  await loadConfigs();
+  startPolling();
+  document.getElementById('modeSelect').addEventListener('change', e => {
+    const m = { '定点抢号': '定点抢号.yaml', '监控补号': '监控补号.yaml' };
+    if (m[e.target.value]) document.getElementById('configSelect').value = m[e.target.value];
+  });
+}
+
+async function loadConfigs() {
+  try {
+    const resp = await fetch('/api/configs');
+    const configs = await resp.json();
+    const sel = document.getElementById('configSelect');
+    sel.innerHTML = '';
+    configs.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.path; o.textContent = c.name; sel.appendChild(o);
+    });
+  } catch(e) { addLog('加载配置失败: ' + e.message, 'error'); }
+}
+
+async function startWorkflow() {
+  const payload = {
+    config_path: document.getElementById('configSelect').value,
+    mode: document.getElementById('modeSelect').value,
+    patient: document.getElementById('pName').value,
+    department: document.getElementById('pDept').value,
+    doctor: document.getElementById('pDoctor').value,
+  };
+  try {
+    const resp = await fetch('/api/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const data = await resp.json();
+    if (data.ok) { setRunning(true); addLog('已启动: ' + payload.mode + ' - ' + payload.doctor, 'success'); }
+    else addLog('启动失败: ' + (data.error || JSON.stringify(data)), 'error');
+  } catch(e) { addLog('启动失败: ' + e.message, 'error'); }
+}
+
+async function stopWorkflow() {
+  try {
+    const resp = await fetch('/api/stop', { method: 'POST' });
+    const data = await resp.json();
+    if (data.ok) { setRunning(false); addLog('已停止', 'warn'); }
+  } catch(e) { addLog('停止失败: ' + e.message, 'error'); }
+}
+
+function setRunning(run) {
+  isRunning = run;
+  document.getElementById('btnStart').disabled = run;
+  document.getElementById('btnStop').disabled = !run;
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.className = 'status-dot ' + (run ? 'running' : 'idle');
+  txt.textContent = run ? '运行中' : '空闲';
+}
+
+async function debugScreenshot() {
+  addLog('请求截图调试...', 'info');
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    addLog('状态: ' + JSON.stringify(d), 'info');
+  } catch(e) { addLog('调试失败: ' + e.message, 'error'); }
+}
+
+function startPolling() { pollTimer = setInterval(pollStatus, 2000); }
+
+async function pollStatus() {
+  try {
+    const resp = await fetch('/api/status');
+    const data = await resp.json();
+    document.getElementById('vState').textContent = data.state || '-';
+    document.getElementById('vStep').textContent = data.step || '-';
+    document.getElementById('vUptime').textContent = data.uptime || '-';
+    const sl = document.getElementById('vSlot');
+    sl.textContent = data.slot || '-'; sl.className = 'info-value' + (data.slot === '有号!' ? ' has-slot' : '');
+    document.getElementById('vWindow').textContent = data.window || '-';
+    if ((data.state === '运行中' || data.state === 'running') !== isRunning) setRunning(data.state === '运行中' || data.state === 'running');
+  } catch(e) {}
+}
+
+function addLog(msg, lvl) {
+  const c = document.getElementById('logContainer');
+  const d = document.createElement('div');
+  d.className = 'log-line' + (lvl ? ' ' + lvl : '');
+  d.textContent = '[' + new Date().toTimeString().substring(0,8) + '] ' + msg;
+  c.appendChild(d); c.scrollTop = c.scrollHeight;
+  while (c.children.length > 200) c.removeChild(c.firstChild);
+}
+
+function clearLogs() { document.getElementById('logContainer').innerHTML = ''; }
+
+function connectWS() {
+  const ws = new WebSocket('ws://' + location.host + '/ws');
+  ws.onmessage = e => addLog(e.data);
+  ws.onclose = () => setTimeout(connectWS, 3000);
+  ws.onerror = () => ws.close();
+}
+
+window.toggleConfig = function() {
+  const card = document.getElementById('configCard');
+  const show = card.style.display === 'none';
+  card.style.display = show ? 'block' : 'none';
+  if (show) loadConfigContent();
+};
+
+async function loadConfigContent() {
+  const path = document.getElementById('configSelect').value;
+  try {
+    const resp = await fetch('/api/config/load?path=' + encodeURIComponent(path));
+    const data = await resp.json();
+    document.getElementById('configEditor').value = data.content || '';
+  } catch(e) { addLog('加载配置失败: ' + e.message, 'error'); }
+}
+
+async function saveConfigContent() {
+  const payload = { path: document.getElementById('configSelect').value, content: document.getElementById('configEditor').value };
+  try {
+    const resp = await fetch('/api/config/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const data = await resp.json();
+    if (data.ok) addLog('配置已保存 (热更新)', 'success');
+  } catch(e) { addLog('保存失败: ' + e.message, 'error'); }
+}
+
+addLog('🌴 华医通助手已就绪', 'info');
+init();
+connectWS();
+</script>
+</body>
+</html>
