@@ -1,0 +1,2 @@
+- [Model Providers](model-providers.md) — 备选模型提供商配置：火山引擎 ark-code-latest 与百度千帆 qianfan-code-latest，全局切换
+- [华医通自动刷号](huayitong-auto-registration.md) — 华医通自动刷号项目：Go 语言编写，Windows UI 自动化（PrintWindow/PostMessage），OCR 识别排期 + 青色按钮检测 + Server酱推送 + 夜间免打扰
