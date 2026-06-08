@@ -38,7 +38,12 @@ type Engine struct {
 	// 步骤循环
 	loopStart int
 	inLoop    bool
+
+		// 验证码识别
+		Yunma *YunmaClient
 }
+
+
 
 // NewEngine 创建工作流引擎
 func NewEngine(configPath string) (*Engine, error) {
@@ -81,6 +86,7 @@ func NewEngine(configPath string) (*Engine, error) {
 		State:      StateIdle,
 		LogChan:    make(chan string, 100),
 		StopChan:   make(chan bool, 1),
+		Yunma:      NewYunmaClient(config.YunmaToken),
 	}, nil
 }
 
@@ -368,6 +374,16 @@ func (e *Engine) executeStep(step WorkflowStep) {
 			e.executeStep(s)
 		}
 
+
+	case "find_click":
+		e.stepFindClick(step)
+
+	case "captcha":
+		e.stepCaptcha(step)
+
+	case "captcha_retry":
+		e.stepCaptchaRetry(step)
+
 	default:
 		e.Log("未知动作: %s", action)
 	}
@@ -431,6 +447,69 @@ func (e *Engine) stepOCRClick(step WorkflowStep) {
 		e.Click(step.X, step.Y)
 	} else {
 		e.Log("未找到 %v", step.Keywords)
+		if step.OnNotFound != nil {
+			for _, s := range step.OnNotFound.Steps {
+				e.executeStep(s)
+			}
+		}
+	}
+}
+
+// stepFindClick 模板匹配查找并点击
+func (e *Engine) stepFindClick(step WorkflowStep) {
+	if step.Image == "" {
+		e.Log("find_click: image 为空")
+		return
+	}
+
+	// 加载模板图片
+	template, err := e.LoadTemplate(step.Image)
+	if err != nil {
+		e.Log("加载模板失败: %v", err)
+		// 降级到坐标点击
+		if step.X > 0 || step.Y > 0 {
+			e.Log("降级到坐标点击 (%d,%d)", step.X, step.Y)
+			e.Click(step.X, step.Y)
+		}
+		return
+	}
+
+	// 截图
+	img, err := e.Capture()
+	if err != nil {
+		e.Log("find_click 截图失败: %v", err)
+		return
+	}
+
+	// 匹配阈值
+	threshold := step.MatchThreshold
+	if threshold <= 0 {
+		threshold = 0.8 // 默认0.8
+	}
+
+	var result *MatchResult
+	if len(step.Region) == 4 {
+		result = MatchTemplateRegion(img, template, step.Region, threshold)
+	} else {
+		result = MatchTemplate(img, template, threshold)
+	}
+
+	if result != nil {
+		e.Log("模板匹配成功: %s (置信度=%.2f, 位置=%d,%d)", step.Image, result.Confidence, result.CenterX, result.CenterY)
+		e.Click(result.CenterX, result.CenterY)
+
+		if step.OnFound != nil {
+			for _, s := range step.OnFound.Steps {
+				e.executeStep(s)
+			}
+		}
+	} else {
+		e.Log("模板匹配失败: %s", step.Image)
+		// 降级到坐标点击
+		if step.X > 0 || step.Y > 0 {
+			e.Log("降级到坐标点击 (%d,%d)", step.X, step.Y)
+			e.Click(step.X, step.Y)
+		}
 		if step.OnNotFound != nil {
 			for _, s := range step.OnNotFound.Steps {
 				e.executeStep(s)

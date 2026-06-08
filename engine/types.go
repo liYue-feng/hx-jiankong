@@ -4,23 +4,25 @@ import "time"
 
 // WorkflowStep 表示一个工作流步骤
 type WorkflowStep struct {
-	Action      string            `yaml:"action" json:"action"`
-	Desc        string            `yaml:"desc" json:"desc"`
-	X           int               `yaml:"x,omitempty" json:"x,omitempty"`
-	Y           int               `yaml:"y,omitempty" json:"y,omitempty"`
-	Region      []int             `yaml:"region,omitempty" json:"region,omitempty"` // [left, top, right, bottom]
-	Keywords    []string          `yaml:"keywords,omitempty" json:"keywords,omitempty"`
-	Timeout     int               `yaml:"timeout,omitempty" json:"timeout,omitempty"`     // 秒
-	Retry       int               `yaml:"retry,omitempty" json:"retry,omitempty"`         // 重试次数
-	WaitBefore  int               `yaml:"wait_before,omitempty" json:"wait_before,omitempty"` // 步骤前等待秒数
-	WaitAfter   int               `yaml:"wait_after,omitempty" json:"wait_after,omitempty"`   // 步骤后等待秒数
-	UntilTime   string            `yaml:"until_time,omitempty" json:"until_time,omitempty"`   // "08:00:00" 等待到指定时间
-	Interval    *IntervalConfig   `yaml:"interval,omitempty" json:"interval,omitempty"`
-	OnFound     *ConditionalStep  `yaml:"on_found,omitempty" json:"on_found,omitempty"`
-	OnNotFound  *ConditionalStep  `yaml:"on_not_found,omitempty" json:"on_not_found,omitempty"`
-	SubSteps    []WorkflowStep    `yaml:"substeps,omitempty" json:"substeps,omitempty"`
-	CheckColor  *ColorCheck       `yaml:"check_color,omitempty" json:"check_color,omitempty"`
-	Params      map[string]string `yaml:"params,omitempty" json:"params,omitempty"`
+	Action          string            `yaml:"action" json:"action"`
+	Desc            string            `yaml:"desc" json:"desc"`
+	X               int               `yaml:"x,omitempty" json:"x,omitempty"`
+	Y               int               `yaml:"y,omitempty" json:"y,omitempty"`
+	Region          []int             `yaml:"region,omitempty" json:"region,omitempty"` // [left, top, right, bottom]
+	Keywords        []string          `yaml:"keywords,omitempty" json:"keywords,omitempty"`
+	Timeout         int               `yaml:"timeout,omitempty" json:"timeout,omitempty"`     // 秒
+	Retry           int               `yaml:"retry,omitempty" json:"retry,omitempty"`         // 重试次数
+	WaitBefore      int               `yaml:"wait_before,omitempty" json:"wait_before,omitempty"` // 步骤前等待秒数
+	WaitAfter       int               `yaml:"wait_after,omitempty" json:"wait_after,omitempty"`   // 步骤后等待秒数
+	UntilTime       string            `yaml:"until_time,omitempty" json:"until_time,omitempty"`   // "08:00:00" 等待到指定时间
+	Interval        *IntervalConfig   `yaml:"interval,omitempty" json:"interval,omitempty"`
+	OnFound         *ConditionalStep  `yaml:"on_found,omitempty" json:"on_found,omitempty"`
+	OnNotFound      *ConditionalStep  `yaml:"on_not_found,omitempty" json:"on_not_found,omitempty"`
+	SubSteps        []WorkflowStep    `yaml:"substeps,omitempty" json:"substeps,omitempty"`
+	CheckColor      *ColorCheck       `yaml:"check_color,omitempty" json:"check_color,omitempty"`
+	Params          map[string]string `yaml:"params,omitempty" json:"params,omitempty"`
+	Image           string            `yaml:"image,omitempty" json:"image,omitempty"`                       // 模板匹配图片路径(png/xxx.png)
+	MatchThreshold  float64           `yaml:"match_threshold,omitempty" json:"match_threshold,omitempty"`   // NCC匹配阈值(0~1)，默认0.8
 }
 
 type IntervalConfig struct {
@@ -67,7 +69,7 @@ type ScheduleConfig struct {
 	RefreshMin  int    `yaml:"refresh_min" json:"refresh_min"`
 	RefreshMax  int    `yaml:"refresh_max" json:"refresh_max"`
 	NoSlotMin   int    `yaml:"noslot_min" json:"noslot_min"`   // 无号推送间隔(分钟)
-	NoSlotMax   int    `yaml:"noslot_min" json:"noslot_max"`   // 无号推送间隔(分钟)
+	NoSlotMax   int    `yaml:"noslot_max" json:"noslot_max"`   // 无号推送间隔(分钟)
 	SessionTimeout int `yaml:"session_timeout" json:"session_timeout"` // 小程序超时(分钟)
 }
 

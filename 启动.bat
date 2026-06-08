@@ -1,32 +1,29 @@
 @echo off
+chcp 65001 >nul
 cd /d "%~dp0"
 
 echo ========================================
-echo   Huayitong Auto Registration System
+echo   Huayitong Auto Registration Assistant
 echo ========================================
 echo.
 
-REM Check for Python
-python --version >nul 2>&1
-if %errorlevel% neq 0 (
-    py --version >nul 2>&1
-    if %errorlevel% neq 0 (
-        echo [ERROR] Python not found! Please install Python 3.
-        echo.
-        pause
-        exit /b 1
-    )
-    set PYTHON=py
-) else (
-    set PYTHON=python
+if not exist hx_jiankong.exe (
+    echo [ERROR] hx_jiankong.exe not found!
+    pause
+    exit /b 1
 )
 
-echo Starting desktop GUI...
-echo Go server will be auto-started in background.
+echo Starting Go server...
+echo Open browser to http://127.0.0.1:8088
 echo.
+start /min /b hx_jiankong.exe
 
-%PYTHON% hx_gui.py
+echo Waiting for server...
+ping 127.0.0.1 -n 4 >nul
 
 echo.
-echo Application closed.
+echo Browser should open automatically.
+echo If not, visit: http://127.0.0.1:8088
+echo.
+echo Close this window to stop the server.
 pause

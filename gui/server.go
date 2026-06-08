@@ -89,13 +89,19 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	status := map[string]interface{}{
 		"state":   "idle",
-		"config":  s.AppHandler.CurrentConfig,
+		"config":  "",
 		"uptime":  "0s",
-		"logs":    s.LogManager.GetRecent(20),
+		"slot":    "-",
+		"window":  "-",
+		"step":    "-",
 	}
 	if s.AppHandler != nil && s.AppHandler.OnGetStatus != nil {
-		status = s.AppHandler.OnGetStatus()
+		for k, v := range s.AppHandler.OnGetStatus() {
+			status[k] = v
+		}
 	}
+	// always include logs
+	status["logs"] = s.LogManager.GetRecent(20)
 	json.NewEncoder(w).Encode(status)
 }
 

@@ -1,7 +1,7 @@
 # 监控补号模式 - 华医通
 name: "监控补号"
 mode: monitor
-description: "晚上8点开始监控医生排班，发现有号立即抢号"
+description: "从微信入口开始，自动导航到医生详情页监控号源，有号自动抢"
 patient: ""
 department: ""
 doctor: ""
@@ -9,26 +9,35 @@ sct_key: "YOUR_SERVERCHAN_KEY_HERE"
 yunma_token: "YOUR_YUNMA_TOKEN_HERE"
 
 schedule:
-  enter_time: "20:00"
-  target_time: "20:00"
-  night_start: 1
-  night_end: 6
-  refresh_min: 30
-  refresh_max: 180
-  session_timeout: 15
+  night_start: 1          # 夜间开始(凌晨1点)
+  night_end: 6            # 夜间结束(早上6点)
+  refresh_min: 30         # 最小刷新间隔(秒)
+  refresh_max: 180        # 最大刷新间隔(秒)
+  session_timeout: 15     # 小程序超时(分钟)
 
-# 恢复流程(超时后重新进入小程序)
+# 恢复流程(超时/登出后重新进入)
 recovery:
-  - action: click
-    x: 358
-    y: 92
-    desc: "点击搜索回到列表"
   - action: wait
-    desc: "等待加载"
+    desc: "等待页面稳定"
     timeout: 2
+  - action: find_click
+    desc: "查找诊疗服务按钮(恢复)"
+    image: "png/诊疗服务按钮.png"
+    match_threshold: 0.75
+    x: 100
+    y: 200
+    wait_after: 3
+  - action: goto
+    desc: "跳到入口步骤"
+    params:
+      label: "entry"
 
-# 挂号成功
+# 挂号成功流程
 on_success:
+  - action: capture
+    desc: "截图支付页面"
+    params:
+      save: "screenshots/payment_success.png"
   - action: notify
     desc: "抢号成功通知"
     params:
@@ -36,99 +45,230 @@ on_success:
       body: "已抢到号源，请立即支付"
       urgent: "true"
 
-# 无号时的处理
-on_no_slots:
-  - action: click
-    x: 20
-    y: 40
-    desc: "点击返回按钮"
-
 # 主流程
 steps:
-  - action: recovery
-    desc: "先执行恢复流程确保在正确状态"
+  # ====== 入口导航 (从微信聊天页开始) ======
+  - action: wait
+    desc: "等待页面稳定"
+    timeout: 2
+    params:
+      label: "entry"
 
+  # 点击诊疗服务进入华医通
+  - action: find_click
+    desc: "点击诊疗服务按钮"
+    image: "png/诊疗服务按钮.png"
+    match_threshold: 0.75
+    x: 100    # 降级坐标
+    y: 200
+    wait_after: 3
+
+  # 首页点预约挂号
+  - action: find_click
+    desc: "点击预约挂号"
+    image: "png/小程序首页.png"
+    match_threshold: 0.7
+    x: 100    # 降级坐标
+    y: 300
+    wait_after: 3
+
+  # 选就诊人
+  - action: find_click
+    desc: "选择就诊人"
+    image: "png/就诊卡.png"
+    match_threshold: 0.7
+    x: 100    # 降级坐标
+    y: 300
+    wait_after: 2
+
+  # 勾选挂号须知
+  - action: find_click
+    desc: "勾选挂号须知"
+    image: "png/挂号须知.png"
+    match_threshold: 0.75
+    x: 100    # 降级坐标
+    y: 400
+    wait_after: 1
+
+  # 确认须知
+  - action: find_click
+    desc: "确认须知"
+    image: "png/确认须知.png"
+    match_threshold: 0.7
+    x: 200    # 降级坐标
+    y: 500
+    wait_after: 3
+
+  # 进入搜索科室
+  - action: find_click
+    desc: "点击搜索栏"
+    image: "png/搜索栏.png"
+    match_threshold: 0.7
+    x: 200    # 降级坐标
+    y: 50
+    wait_after: 2
+
+  # 点击搜索输入框聚焦
+  - action: find_click
+    desc: "点击搜索输入框"
+    image: "png/搜索输入框.png"
+    match_threshold: 0.7
+    x: 200    # 降级坐标
+    y: 100
+    wait_after: 1
+
+  # 输入医生名字（当前需手动，后续可添加自动输入）
+  - action: wait
+    desc: "等待输入医生名字"
+    timeout: 15
+
+  # 点击搜索按钮
+  - action: find_click
+    desc: "点击搜索按钮"
+    image: "png/搜索页面.png"
+    match_threshold: 0.7
+    x: 300    # 降级坐标
+    y: 100
+    wait_after: 3
+
+  # 确认进入医生列表页
   - action: ensure_page
     desc: "确保在医生列表页"
     params:
       target: "list"
 
+  # ====== 监控循环开始 ======
+  - action: loop_start
+    desc: "标记监控循环起点"
+
+  # 进入医生详情页
   - action: click
     desc: "点击医生卡片进入详情页"
     x: 340
     y: 335
-    wait_after: 2
+    wait_after: 3
 
+  # 确认进入详情页
   - action: ensure_page
     desc: "确认进入详情页"
     params:
       target: "detail"
 
+  # ====== 检查号源 ======
   - action: check_slots
-    desc: "检查号源"
+    desc: "检查号源(预约/可约)"
     region: [18, 294, 383, 775]
     keywords: ["预约", "可约", "号源", "余号"]
+    timeout: 5
     on_found:
       message: "发现号源!!!"
       notify_user: true
       steps:
-        # 点击预约按钮
-        - action: click
+        # 用模板匹配精确定位预约按钮
+        - action: find_click
+          desc: "点击预约按钮"
+          image: "png/预约.png"
+          region: [18, 294, 383, 775]
+          match_threshold: 0.7
           x: 200
           y: 310
-          desc: "点击预约按钮"
           wait_after: 3
 
         - action: capture
-          desc: "截图验证码页"
+          desc: "截图验证码"
           params:
             save: "screenshots/captcha.png"
 
+        # 推送验证码通知
         - action: notify
-          desc: "验证码通知"
+          desc: "进入验证码阶段"
           params:
-            title: "请立即输入验证码"
-            body: "发现号源已点击预约，请在30秒内输入验证码"
+            title: "验证码已出现"
+            body: "正在自动识别验证码..."
             urgent: "true"
 
+        # 验证码识别+输入
+        - action: captcha
+          desc: "识别验证码并输入"
+          region: [100, 300, 280, 370]    # TODO: 验证码图片区域
+          x: 200                           # TODO: 输入框X
+          y: 340                           # TODO: 输入框Y
+          params:
+            confirm_x: "200"               # TODO: 确认按钮X
+            confirm_y: "500"               # TODO: 确认按钮Y
+
         - action: wait
-          desc: "等待用户输入验证码"
-          timeout: 60
+          desc: "等待确认结果"
+          timeout: 3
 
-        - action: click
-          x: 200
-          y: 500
-          desc: "点击确认"
-          wait_after: 3
-
-        # 检查错误后重试
+        # 检查是否挂号成功
         - action: ocr_check
-          desc: "检查错误提示"
-          region: [50, 200, 350, 400]
-          keywords: ["接口错误", "接口异常", "网络失败", "没有号"]
+          desc: "检查支付页面"
+          region: [50, 50, 350, 550]
+          keywords: ["支付", "确认支付", "锁号", "微信支付"]
           on_found:
-            message: "抢号失败，重试"
-            loop: true
+            message: "挂号成功!"
+            notify_user: true
+            steps:
+              - action: goto
+                desc: "成功"
+                params:
+                  label: "success"
 
+          on_not_found:
+            steps:
+              # 检查错误提示
+              - action: ocr_check
+                desc: "检查错误提示"
+                region: [50, 200, 350, 450]
+                keywords: ["接口错误", "接口异常", "网络失败", "没有号", "已约满", "繁忙"]
+                on_found:
+                  message: "抢号失败，自动重试"
+                  steps:
+                    # 重新找预约按钮
+                    - action: find_click
+                      desc: "重新点击预约按钮"
+                      image: "png/预约.png"
+                      region: [18, 294, 383, 775]
+                      match_threshold: 0.7
+                      x: 200
+                      y: 310
+                      wait_after: 2
+                    - action: goto
+                      desc: "重试验证码"
+                      params:
+                        label: "retry_captcha"
+                on_not_found:
+                  steps:
+                    # 验证码刷新了，重试
+                    - action: captcha_retry
+                      desc: "重试验证码"
+                      region: [100, 300, 280, 370]
+                      x: 200
+                      y: 340
+                      params:
+                        confirm_x: "200"
+                        confirm_y: "500"
+
+    # ====== 无号处理 ======
     on_not_found:
       steps:
-        # 返回列表页重新进入
+        # 返回医生列表页
         - action: click
+          desc: "返回医生列表"
           x: 20
           y: 40
-          desc: "点击返回退出详情"
           wait_after: 1
 
+  # ====== 随机等待后重新进入 ======
   - action: random_wait
-    desc: "随机等待后重新进入"
+    desc: "随机等待后重新进入详情"
     interval:
       min: 30
       max: 180
 
-  - action: goto
-    desc: "循环到ensure_page步骤"
-    params:
-      loop: "先执行恢复流程确保在正确状态"
+  - action: loop_end
+    desc: "回到循环起点"
 
 # 应用配置
 app_config:
