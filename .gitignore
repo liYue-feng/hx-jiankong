@@ -31,3 +31,6 @@ __pycache__/
 # Temp
 *.tmp
 debug_*.png
+
+# tesseract temp files
+ocr_temp_*
