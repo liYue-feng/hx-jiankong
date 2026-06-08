@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"hx_jiankong/engine"
@@ -31,14 +32,26 @@ func main() {
 
 	// 创建日志桥接
 	var currentEngine *engine.Engine
+	var engineMu sync.Mutex
 
 	server.AddLog("华医通助手已启动")
 	server.AddLog(fmt.Sprintf("工作目录: %s", baseDir))
 
 	// 设置应用处理器
+
 	server.SetAppHandler(&gui.AppHandler{
 		ConfigDir: baseDir,
 		OnStart: func(configPath, mode, patient, dept, doctor string) error {
+			engineMu.Lock()
+			defer engineMu.Unlock()
+
+			// 如果有正在运行的引擎，先停止
+			if currentEngine != nil {
+				currentEngine.Stop()
+				currentEngine = nil
+				time.Sleep(500 * time.Millisecond)
+			}
+
 			eng, err := engine.NewEngine(configPath)
 			if err != nil {
 				return err

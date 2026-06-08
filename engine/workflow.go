@@ -79,6 +79,9 @@ func NewEngine(configPath string) (*Engine, error) {
 	if config.Schedule.SessionTimeout == 0 {
 		config.Schedule.SessionTimeout = 15
 	}
+	if config.MaxOCRRetry == 0 {
+		config.MaxOCRRetry = 60
+	}
 
 	return &Engine{
 		Config:     &config,
@@ -198,6 +201,7 @@ func (e *Engine) DetectPage() string {
 func (e *Engine) Run() {
 	e.State = StateRunning
 	e.CurrentStep = 0
+	e.consecutiveFails = 0
 	e.StartTime = time.Now()
 	e.Log("开始执行工作流: %s (模式: %s)", e.Config.Name, e.Config.Mode)
 
@@ -411,6 +415,7 @@ func (e *Engine) stepOCRCheck(step WorkflowStep) {
 	e.Log("OCR结果: %s (关键词: %v) → 找到=%v", cleaned, step.Keywords, found)
 
 	if found && step.OnFound != nil {
+		e.consecutiveFails = 0
 		e.Log("匹配到关键词，执行 on_found")
 		if step.OnFound.NotifyUser {
 			e.Notify(step.OnFound.Message, fmt.Sprintf("关键词: %v", step.Keywords), true)
@@ -422,7 +427,18 @@ func (e *Engine) stepOCRCheck(step WorkflowStep) {
 			e.CurrentStep-- // 重复当前步骤
 		}
 	} else if !found && step.OnNotFound != nil {
-		e.Log("未匹配到关键词，执行 on_not_found")
+		e.consecutiveFails++
+		e.Log("未匹配到关键词(%d次)，执行 on_not_found", e.consecutiveFails)
+		// 最大重试60次(约3-5分钟)后停止循环
+		maxRetry := 60
+		if e.Config.MaxOCRRetry > 0 {
+			maxRetry = e.Config.MaxOCRRetry
+		}
+		if step.OnNotFound.Loop && e.consecutiveFails >= maxRetry {
+			e.Log("OCR重试%d次后放弃，停止循环", maxRetry)
+			e.Notify("OCR重试超时", fmt.Sprintf("连续%d次未找到关键词: %v", maxRetry, step.Keywords), false)
+			step.OnNotFound.Loop = false
+		}
 		for _, s := range step.OnNotFound.Steps {
 			e.executeStep(s)
 		}

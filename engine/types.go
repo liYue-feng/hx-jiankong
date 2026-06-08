@@ -53,6 +53,7 @@ type WorkflowConfig struct {
 	Doctor      string         `yaml:"doctor" json:"doctor"`
 	SCTKey      string         `yaml:"sct_key" json:"sct_key"`           // Server酱 Key
 	YunmaToken  string         `yaml:"yunma_token" json:"yunma_token"`   // 云码验证码 Token
+	MaxOCRRetry int            `yaml:"max_ocr_retry,omitempty" json:"max_ocr_retry,omitempty"` // OCR最大重试次数(默认60)
 	Steps       []WorkflowStep `yaml:"steps" json:"steps"`
 	Recovery    []WorkflowStep `yaml:"recovery,omitempty" json:"recovery,omitempty"` // 超时恢复步骤
 	OnSuccess   []WorkflowStep `yaml:"on_success,omitempty" json:"on_success,omitempty"`

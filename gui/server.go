@@ -240,7 +240,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 // Broadcast 广播日志到所有 WebSocket 客户端
 func (s *Server) Broadcast(msg string) {
-	s.LogManager.Add(msg)
+	// AddLog 已调用 LogManager.Add，这里不再重复添加
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for conn := range s.wsClients {
