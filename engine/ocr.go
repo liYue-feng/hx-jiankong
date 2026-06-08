@@ -5,10 +5,25 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
+
+// TessdataPath tesseract 语言包路径，启动时自动检测
+var TessdataPath string
+
+func init() {
+	// 自动检测项目下的 tessdata 目录
+	if d, err := os.Getwd(); err == nil {
+		p := filepath.Join(d, "tessdata")
+		if fi, err := os.Stat(p); err == nil && fi.IsDir() {
+			TessdataPath = p
+		}
+	}
+}
 
 // OCRResult OCR 识别结果
 type OCRResult struct {
@@ -36,10 +51,19 @@ func OCRImage(img image.Image, lang string) (*OCRResult, error) {
 
 	// 调用 tesseract
 	tempFile := fmt.Sprintf("ocr_temp_%d", time.Now().UnixNano())
-	defer exec.Command("cmd", "/c", "del", tempFile+".png", tempFile, tempFile+".tsv").Run()
+	defer func() {
+		os.Remove(tempFile)
+		os.Remove(tempFile + ".tsv")
+	}()
 
-	// 保存临时文件
-	cmd := exec.Command("cmd", "/c", "tesseract", "stdin", tempFile, "-l", lang, "--psm", "6", "tsv")
+	// 构建 tesseract 命令，优先使用项目 tessdata
+	args := []string{"/c", "tesseract"}
+	if TessdataPath != "" {
+		args = append(args, "--tessdata-dir", TessdataPath)
+	}
+	args = append(args, "stdin", tempFile, "-l", lang, "--psm", "6", "tsv")
+
+	cmd := exec.Command("cmd", args...)
 	cmd.Stdin = bytes.NewReader(buf.Bytes())
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -57,17 +81,16 @@ func OCRRegion(fullImg image.Image, left, top, right, bottom int, lang string) (
 }
 
 func parseTSV(tsvPath string) (*OCRResult, error) {
-	cmd := exec.Command("cmd", "/c", "type", tsvPath)
-	out, err := cmd.Output()
+	data, err := os.ReadFile(tsvPath)
 	if err != nil {
 		return nil, fmt.Errorf("ocr: 读取TSV失败: %v", err)
 	}
 
 	result := &OCRResult{}
-	lines := strings.Split(string(out), "\n")
+	lines := strings.Split(string(data), "\n")
 	for i, line := range lines {
 		if i == 0 || line == "" {
-			continue // 跳过表头
+			continue
 		}
 		fields := strings.Split(line, "\t")
 		if len(fields) < 12 {

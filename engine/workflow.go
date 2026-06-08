@@ -426,6 +426,9 @@ func (e *Engine) stepOCRCheck(step WorkflowStep) {
 		for _, s := range step.OnNotFound.Steps {
 			e.executeStep(s)
 		}
+		if step.OnNotFound.Loop {
+			e.CurrentStep-- // 重复当前步骤
+		}
 	}
 }
 
