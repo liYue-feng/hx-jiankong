@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -15,11 +16,17 @@ import (
 	"hx_jiankong/notify"
 )
 
+const port = 8088
+const webAddr = "http://127.0.0.1:8088"
+
 func main() {
 	baseDir := filepath.Dir(os.Args[0])
 	if abs, err := filepath.Abs(baseDir); err == nil {
 		baseDir = abs
 	}
+
+	// 创建日志目录
+	os.MkdirAll(filepath.Join(baseDir, "logs"), 0755)
 
 	logFile, _ := os.OpenFile(filepath.Join(baseDir, "logs", "app.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if logFile != nil {
@@ -27,8 +34,18 @@ func main() {
 		defer logFile.Close()
 	}
 
+	// 检测是否有已运行的实例
+	if conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 500*time.Millisecond); err == nil {
+		conn.Close()
+		fmt.Printf("华医通助手已在运行中 (端口 %d)\n", port)
+		fmt.Printf("正在打开浏览器...\n\n")
+		openBrowser(webAddr)
+		pause("按任意键关闭本窗口...")
+		return
+	}
+
 	// 创建 GUI 服务器
-	server := gui.NewServer(8088, baseDir)
+	server := gui.NewServer(port, baseDir)
 
 	// 创建日志桥接
 	var currentEngine *engine.Engine
@@ -38,7 +55,6 @@ func main() {
 	server.AddLog(fmt.Sprintf("工作目录: %s", baseDir))
 
 	// 设置应用处理器
-
 	server.SetAppHandler(&gui.AppHandler{
 		ConfigDir: baseDir,
 		OnStart: func(configPath, mode, patient, dept, doctor string) error {
@@ -166,18 +182,60 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// 启动服务器
-	addr := "http://127.0.0.1:8088"
-	fmt.Printf("\n华医通助手已启动\n")
-	fmt.Printf("请打开浏览器访问: %s\n\n", addr)
+	// 启动前检测 tesseract
+	if err := checkTesseract(); err != nil {
+		fmt.Printf("⚠ 未检测到 Tesseract OCR: %v\n", err)
+		fmt.Println("  图片识别功能不可用，工作流会降级到模板匹配。\n")
+	}
+
+	fmt.Print("\n")
+	fmt.Println("============================================")
+	fmt.Println("  华医通自动挂号助手 v2.0")
+	fmt.Println("============================================")
+	fmt.Printf("  服务器: %s\n", webAddr)
+	fmt.Println("  在此窗口按 Ctrl+C 可停止服务")
+	fmt.Println("============================================")
+	fmt.Print("\n")
 
 	// 自动打开浏览器
-	go func() {
-		time.Sleep(500 * time.Millisecond)
-		exec.Command("cmd", "/c", "start", addr).Start()
-	}()
+	openBrowser(webAddr)
 
 	if err := server.Start(); err != nil {
-		log.Fatalf("服务器启动失败: %v", err)
+		fmt.Printf("\n启动失败: %v\n", err)
+		pause("按任意键退出...")
 	}
+}
+
+func openBrowser(url string) {
+	go func() {
+		time.Sleep(800 * time.Millisecond)
+		exec.Command("cmd", "/c", "start", url).Start()
+	}()
+}
+
+func pause(msg string) {
+	fmt.Print(msg)
+	var dummy string
+	fmt.Scanln(&dummy)
+}
+
+func checkTesseract() error {
+	// 先尝试 PATH
+	if _, err := exec.LookPath("tesseract"); err == nil {
+		return nil
+	}
+	// 尝试常见安装位置
+	paths := []string{
+		`C:\Program Files\Tesseract-OCR\tesseract.exe`,
+		`C:\Program Files (x86)\Tesseract-OCR\tesseract.exe`,
+		os.ExpandEnv(`$LOCALAPPDATA\Tesseract-OCR\tesseract.exe`),
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			// 设置引擎中的路径
+			engine.TesseractPath = p
+			return nil
+		}
+	}
+	return fmt.Errorf("未安装Tesseract-OCR，请前往 https://github.com/UB-Mannheim/tesseract/releases 下载安装")
 }

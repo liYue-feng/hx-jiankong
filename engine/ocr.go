@@ -15,6 +15,9 @@ import (
 // TessdataPath tesseract 语言包路径，启动时自动检测
 var TessdataPath string
 
+// TesseractPath tesseract 可执行文件完整路径
+var TesseractPath string
+
 func init() {
 	// 自动检测项目下的 tessdata 目录
 	if d, err := os.Getwd(); err == nil {
@@ -57,7 +60,12 @@ func OCRImage(img image.Image, lang string) (*OCRResult, error) {
 	}()
 
 	// 构建 tesseract 命令，优先使用项目 tessdata
-	args := []string{"/c", "tesseract"}
+	// 使用完整路径或 PATH 中的 tesseract
+	tesseractBin := "tesseract"
+	if TesseractPath != "" {
+		tesseractBin = TesseractPath
+	}
+	args := []string{"/c", tesseractBin}
 	if TessdataPath != "" {
 		args = append(args, "--tessdata-dir", TessdataPath)
 	}
