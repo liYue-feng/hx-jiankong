@@ -103,20 +103,26 @@ func (e *Engine) Log(format string, args ...interface{}) {
 	log.Printf("[引擎] %s", msg)
 }
 
-// FindWindow 查找并缓存小程序窗口句柄
+// FindWindow 查找并缓存微信小程序窗口句柄
 func (e *Engine) FindWindow() error {
+	// 方式一：用类名过滤查找微信窗口
+	win := FindWeChatWindow()
+	if win != nil {
+		e.WindowHWND = win.HWND
+		e.Log("找到窗口: HWND=%x 标题=%s 类名=%s 尺寸=%dx%d", win.HWND, win.Title, win.Class, win.W, win.H)
+		return nil
+	}
+
+	// 方式二：按标题关键词搜索（排除浏览器）
 	title := e.Config.AppConfig.MiniAppTitle
 	if title == "" {
 		title = "微信"
 	}
-
-	// 尝试多个关键词
-	titles := []string{"微信", "小程序", "华医通", title}
-	for _, t := range titles {
+	for _, t := range []string{title, "微信", "小程序"} {
 		win := FindWindowByTitle(t)
 		if win != nil {
 			e.WindowHWND = win.HWND
-			e.Log("找到窗口: HWND=%x 标题=%s 尺寸=%dx%d", win.HWND, win.Title, win.W, win.H)
+			e.Log("找到窗口(标题): HWND=%x 标题=%s 尺寸=%dx%d", win.HWND, win.Title, win.W, win.H)
 			return nil
 		}
 	}

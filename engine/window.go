@@ -76,18 +76,91 @@ type WinInfo struct {
 	W, H    int
 }
 
-// FindWindowByTitle 查找包含指定标题的窗口
-func FindWindowByTitle(titleParts ...string) *WinInfo {
+// getClassName 获取窗口类名
+func getClassName(hwnd HWND) string {
+	var buf [256]uint16
+	procGetClassNameW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&buf[0])), 256)
+	return syscall.UTF16ToString(buf[:])
+}
+
+// isBrowserClass 判断窗口类名是否为浏览器
+func isBrowserClass(cls string) bool {
+	lower := strings.ToLower(cls)
+	browserKeywords := []string{"chrome", "cef", "edge", "webview", "mozilla", "opera", "safari"}
+	for _, kw := range browserKeywords {
+		if strings.Contains(lower, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// isWeChatClass 判断窗口类名是否为微信
+func isWeChatClass(cls string) bool {
+	lower := strings.ToLower(cls)
+	return strings.Contains(lower, "wechat") || strings.Contains(lower, "wx")
+}
+
+// FindWeChatWindow 查找微信主窗口（按标题+类名过滤，不含浏览器）
+func FindWeChatWindow() *WinInfo {
 	var found *WinInfo
 	callback := syscall.NewCallback(func(hwnd HWND, lParam uintptr) uintptr {
-		var buf [256]uint16
-		procGetWindowTextW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&buf[0])), 256)
-		title := syscall.UTF16ToString(buf[:])
-
 		ret, _, _ := procIsWindowVisible.Call(uintptr(hwnd))
 		if ret == 0 {
 			return 1
 		}
+
+		var buf [256]uint16
+		procGetWindowTextW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&buf[0])), 256)
+		title := syscall.UTF16ToString(buf[:])
+		cls := getClassName(hwnd)
+
+		// 排除浏览器窗口
+		if isBrowserClass(cls) {
+			return 1
+		}
+
+		// 标题包含"微信" 或 类名是微信类
+		if strings.Contains(title, "微信") || isWeChatClass(cls) {
+			var rect WinRect
+			procGetWindowRect.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&rect)))
+			w, h := int(rect.Right-rect.Left), int(rect.Bottom-rect.Top)
+			if w > 100 && h > 100 { // 过滤掉小控件
+				found = &WinInfo{
+					HWND:    uintptr(hwnd),
+					Title:   title,
+					Class:   cls,
+					W:       w,
+					H:       h,
+					Visible: true,
+				}
+				return 0
+			}
+		}
+		return 1
+	})
+	procEnumWindows.Call(callback, 0)
+	return found
+}
+
+// FindWindowByTitle 查找包含指定标题的窗口（排除浏览器窗口）
+func FindWindowByTitle(titleParts ...string) *WinInfo {
+	var found *WinInfo
+	callback := syscall.NewCallback(func(hwnd HWND, lParam uintptr) uintptr {
+		ret, _, _ := procIsWindowVisible.Call(uintptr(hwnd))
+		if ret == 0 {
+			return 1
+		}
+
+		cls := getClassName(hwnd)
+		if isBrowserClass(cls) {
+			return 1
+		}
+
+		var buf [256]uint16
+		procGetWindowTextW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&buf[0])), 256)
+		title := syscall.UTF16ToString(buf[:])
+
 		for _, part := range titleParts {
 			if part == "" || title == "" {
 				continue
@@ -95,14 +168,18 @@ func FindWindowByTitle(titleParts ...string) *WinInfo {
 			if strings.Contains(title, part) {
 				var rect WinRect
 				procGetWindowRect.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&rect)))
-				found = &WinInfo{
-					HWND:    uintptr(hwnd),
-					Title:   title,
-					W:       int(rect.Right - rect.Left),
-					H:       int(rect.Bottom - rect.Top),
-					Visible: true,
+				w, h := int(rect.Right-rect.Left), int(rect.Bottom-rect.Top)
+				if w > 100 && h > 100 {
+					found = &WinInfo{
+						HWND:    uintptr(hwnd),
+						Title:   title,
+						Class:   cls,
+						W:       w,
+						H:       h,
+						Visible: true,
+					}
+					return 0
 				}
-				return 0
 			}
 		}
 		return 1

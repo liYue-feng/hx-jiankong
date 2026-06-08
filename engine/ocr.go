@@ -46,40 +46,41 @@ func OCRImage(img image.Image, lang string) (*OCRResult, error) {
 		return nil, fmt.Errorf("ocr: 图片为空")
 	}
 
-	// 编码为 PNG
+	// 保存 PNG 到临时文件
+	tempBase := filepath.Join(os.TempDir(), fmt.Sprintf("hxocr_%d", time.Now().UnixNano()))
+	inputFile := tempBase + ".png"
+	tsvFile := inputFile + ".tsv"
+	defer os.Remove(inputFile)
+	defer os.Remove(tsvFile)
+
 	buf := new(bytes.Buffer)
 	if err := png.Encode(buf, img); err != nil {
 		return nil, fmt.Errorf("ocr: PNG编码失败: %v", err)
 	}
+	if err := os.WriteFile(inputFile, buf.Bytes(), 0644); err != nil {
+		return nil, fmt.Errorf("ocr: 写入临时文件失败: %v", err)
+	}
 
-	// 调用 tesseract
-	tempFile := fmt.Sprintf("ocr_temp_%d", time.Now().UnixNano())
-	defer func() {
-		os.Remove(tempFile)
-		os.Remove(tempFile + ".tsv")
-	}()
-
-	// 构建 tesseract 命令，优先使用项目 tessdata
-	// 使用完整路径或 PATH 中的 tesseract
+	// 构建 tesseract 命令
 	tesseractBin := "tesseract"
 	if TesseractPath != "" {
 		tesseractBin = TesseractPath
 	}
-	args := []string{"/c", tesseractBin}
+
+	args := []string{tesseractBin}
 	if TessdataPath != "" {
 		args = append(args, "--tessdata-dir", TessdataPath)
 	}
-	args = append(args, "stdin", tempFile, "-l", lang, "--psm", "6", "tsv")
+	args = append(args, inputFile, tempBase, "-l", lang, "--psm", "6", "tsv")
 
-	cmd := exec.Command("cmd", args...)
-	cmd.Stdin = bytes.NewReader(buf.Bytes())
+	cmd := exec.Command(args[0], args[1:]...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("ocr: tesseract 失败: %v (%s)", err, string(out))
 	}
 
 	// 读取 TSV 结果
-	return parseTSV(tempFile + ".tsv")
+	return parseTSV(tsvFile)
 }
 
 // OCRRegion 对完整图片的指定区域执行 OCR
