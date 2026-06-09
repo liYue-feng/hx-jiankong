@@ -1,4 +1,5 @@
 # 定点抢号模式 - 华医通
+# 前提：用户已手动进入医生详情页，等待放号
 name: "定点抢号"
 mode: snipe
 description: "用户提前进医生详情页，到点自动抢号 + 验证码识别"
@@ -7,16 +8,16 @@ department: ""
 doctor: ""
 sct_key: "YOUR_SERVERCHAN_KEY_HERE"
 yunma_token: "YOUR_YUNMA_TOKEN_HERE"
+max_ocr_retry: 30
 
 schedule:
-  target_time: "08:00:00"  # 放号时间
-  night_start: 1           # 夜间开始(凌晨1点)
-  night_end: 6             # 夜间结束(早上6点)
+  target_time: "08:00:00"
+  night_start: 1
+  night_end: 6
   refresh_min: 30
   refresh_max: 180
   session_timeout: 15
 
-# 成功流程
 on_success:
   - action: capture
     desc: "截图支付页面"
@@ -25,74 +26,103 @@ on_success:
   - action: notify
     desc: "抢号成功通知"
     params:
-      title: "定点抢号成功!"
-      body: "已抢到号源，请立即支付"
+      title: "抢号成功!"
+      body: "已锁号，请立即支付"
       urgent: "true"
 
-# 主流程
 steps:
-  # 等待到放号时间
+  # 1. 等待到放号时间
   - action: wait_until
     desc: "等待放号时间"
     until_time: "08:00:00"
 
+  # 2. 缓冲
   - action: wait
-    desc: "加50ms缓冲"
+    desc: "缓冲0.5秒"
     timeout: 1
 
-  # ====== 检查预约按钮 ======
-  - action: ocr_check
-    desc: "检查预约按钮"
+  # 3. 循环检测预约按钮（排期区域）→ 点预约
+  - action: find_click
+    desc: "检测并点击预约按钮"
+    image: "png/预约.png"
     region: [18, 294, 383, 775]
-    keywords: ["预约", "可约", "号源", "余号"]
-    timeout: 5
+    match_threshold: 0.7
+    x: 200
+    y: 310
     on_found:
-      message: "发现可预约按钮，开始抢号!"
-      notify_user: true
+      message: "发现预约按钮"
+      notify_user: false
       steps:
-        # 用模板匹配精确定位"预约"按钮并点击
+        # 等待确认预约页面出现
+        - action: wait
+          desc: "等待确认预约页面"
+          timeout: 2
+
+        # 4. 点击确认预约
         - action: find_click
-          desc: "点击预约按钮(模板匹配)"
-          image: "png/预约.png"
-          region: [18, 294, 383, 775]
+          desc: "点击确认预约按钮"
+          image: "png/确认预约.png"
           match_threshold: 0.7
-          x: 200     # 模板匹配失败时降级坐标
-          y: 310
-          wait_after: 3
+          x: 200
+          y: 400
+          wait_after: 2
+          on_not_found:
+            message: "未找到确认预约按钮，可能是其他弹窗"
+            steps:
+              - action: wait
+                timeout: 1
+
+        # ====== 验证码阶段 ======
+        - action: notify
+          desc: "进入验证码阶段，推送通知"
+          params:
+            title: "验证码已出现"
+            body: "正在自动识别验证码..."
+            urgent: "true"
 
         - action: capture
-          desc: "截图验证码"
+          desc: "截图验证码全屏"
           params:
             save: "screenshots/captcha.png"
 
-        # 验证码自动识别+输入
+        # 5. 点击验证码输入区域
+        - action: find_click
+          desc: "点击验证码输入框"
+          image: "png/验证码_输入区域.png"
+          match_threshold: 0.7
+          x: 200
+          y: 340
+          wait_after: 1
+
+        # 6. 云码识别验证码+输入
         - action: captcha
           desc: "识别验证码并输入"
-          region: [100, 300, 280, 370]    # TODO: 验证码图片区域
-          x: 200                           # TODO: 输入框X
-          y: 340                           # TODO: 输入框Y
+          region: [100, 250, 300, 400]
+          x: 200
+          y: 340
           params:
-            confirm_x: "200"               # TODO: 确认按钮X
-            confirm_y: "500"               # TODO: 确认按钮Y
+            confirm_x: "200"
+            confirm_y: "450"
 
-        - action: wait
-          desc: "等待确认结果"
-          timeout: 3
+        # 7. 点击验证码确认按钮
+        - action: find_click
+          desc: "点击确认"
+          image: "png/验证码_确认.png"
+          match_threshold: 0.7
+          x: 200
+          y: 450
+          wait_after: 3
 
-        # 检查是否进入支付页面
+        # 8. 检查结果
         - action: ocr_check
-          desc: "检查支付页面"
+          desc: "检查是否进入支付页"
           region: [50, 50, 350, 550]
           keywords: ["支付", "确认支付", "锁号", "微信支付"]
           on_found:
             message: "挂号成功!"
             notify_user: true
             steps:
-              - action: goto
-                desc: "完成"
-                params:
-                  label: "success"
-
+              - action: success
           on_not_found:
             steps:
               # 检查错误飘字
@@ -101,40 +131,32 @@ steps:
                 region: [50, 200, 350, 450]
                 keywords: ["接口错误", "接口异常", "网络失败", "没有号", "已约满", "繁忙"]
                 on_found:
-                  message: "抢号失败，准备重试"
+                  message: "抢号失败"
                   steps:
-                    - action: find_click
-                      desc: "重新点击预约按钮"
-                      image: "png/预约.png"
-                      region: [18, 294, 383, 775]
-                      match_threshold: 0.7
-                      x: 200
-                      y: 310
-                      wait_after: 2
+                    - action: wait
+                      timeout: 1
                     - action: goto
-                      desc: "重新识别验证码"
                       params:
-                        label: "retry_captcha"
+                        label: "retry_snipe"
                 on_not_found:
                   steps:
+                    # 可能是验证码刷新了，重新识别
                     - action: captcha_retry
-                      desc: "重试验证码(可能刷新)"
-                      region: [100, 300, 280, 370]
+                      desc: "重试验证码"
+                      region: [100, 250, 300, 400]
                       x: 200
                       y: 340
                       params:
                         confirm_x: "200"
-                        confirm_y: "500"
+                        confirm_y: "450"
 
     on_not_found:
-      message: "未发现预约按钮(可能没号或未到放号时间)"
+      message: "未发现预约按钮"
       steps:
         - action: wait
-          desc: "等待1秒后重试"
           timeout: 1
       loop: true
 
-# 应用配置
 app_config:
   back_button:
     x: 20

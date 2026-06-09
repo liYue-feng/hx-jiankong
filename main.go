@@ -185,7 +185,8 @@ func main() {
 	// 启动前检测 tesseract
 	if err := checkTesseract(); err != nil {
 		fmt.Printf("⚠ 未检测到 Tesseract OCR: %v\n", err)
-		fmt.Println("  图片识别功能不可用，工作流会降级到模板匹配。\n")
+		fmt.Println("  图片识别功能不可用，工作流会降级到模板匹配。")
+		fmt.Println()
 	}
 
 	fmt.Print("\n")

@@ -175,11 +175,7 @@ func (e *Engine) DetectPage() string {
 			cleaned := StripSpaces(strings.ToLower(result.Text))
 			e.Log("OCR顶部: %s", cleaned)
 
-			// 医生列表页
-			if strings.Contains(cleaned, "全部号源") || strings.Contains(cleaned, "医生列表") {
-				return "list"
-			}
-			// 详情页
+			// 详情页优先判断，避免“医生公告”里的“医生”误判为列表
 			if strings.Contains(cleaned, "医生公告") || strings.Contains(cleaned, "线上门诊") {
 				return "detail"
 			}
@@ -187,16 +183,10 @@ func (e *Engine) DetectPage() string {
 			if strings.Contains(cleaned, "历史记录") {
 				return "history"
 			}
-		}
-	}
-
-	// 后备：用排期区像素判断
-	sr := e.Config.AppConfig.ScheduleRegion
-	if len(sr) == 4 {
-		pixels := RegionPixels(img, sr[0], sr[1], sr[2], sr[3])
-		e.Log("排期区像素: %d", pixels)
-		if pixels > 5000 {
-			return "detail"
+			// 医生列表/科室搜索相关页面，不强依赖“全部号源”
+			if strings.Contains(cleaned, "全部号源") || strings.Contains(cleaned, "医生列表") || strings.Contains(cleaned, "选择科室") || strings.Contains(cleaned, "搜索") {
+				return "list"
+			}
 		}
 	}
 
@@ -327,6 +317,9 @@ func (e *Engine) executeStep(step WorkflowStep) {
 			}
 		}
 
+	case "success":
+		e.runOnSuccess()
+
 	case "notify":
 		title := step.Desc
 		body := ""
@@ -384,6 +377,21 @@ func (e *Engine) executeStep(step WorkflowStep) {
 			e.executeStep(s)
 		}
 
+
+	case "type_text":
+		if step.Params != nil {
+			if text, ok := step.Params["text"]; ok {
+				// 替换模板变量
+				text = strings.ReplaceAll(text, "{{doctor}}", e.Config.Doctor)
+				text = strings.ReplaceAll(text, "{{patient}}", e.Config.Patient)
+				text = strings.ReplaceAll(text, "{{department}}", e.Config.Department)
+				e.Log("输入文字: %s", text)
+				if e.WindowHWND == 0 {
+					e.FindWindow()
+				}
+				TypeText(e.WindowHWND, text)
+			}
+		}
 
 	case "find_click":
 		e.stepFindClick(step)
@@ -530,15 +538,19 @@ func (e *Engine) stepFindClick(step WorkflowStep) {
 		}
 	} else {
 		e.Log("模板匹配失败: %s", step.Image)
-		// 降级到坐标点击
-		if step.X > 0 || step.Y > 0 {
-			e.Log("降级到坐标点击 (%d,%d)", step.X, step.Y)
-			e.Click(step.X, step.Y)
-		}
 		if step.OnNotFound != nil {
 			for _, s := range step.OnNotFound.Steps {
 				e.executeStep(s)
 			}
+			if step.OnNotFound.Loop {
+				e.CurrentStep--
+			}
+			return
+		}
+		// 只有未配置 on_not_found 时才降级坐标点击，避免检测类步骤误点
+		if step.X > 0 || step.Y > 0 {
+			e.Log("降级到坐标点击 (%d,%d)", step.X, step.Y)
+			e.Click(step.X, step.Y)
 		}
 	}
 }
@@ -566,9 +578,7 @@ func (e *Engine) ensurePage(step WorkflowStep) {
 			e.ClickTarget(e.Config.AppConfig.SearchButton)
 			e.Log("历史记录页 → 点搜索")
 		default:
-			// 未知页面: 用搜索恢复
-			e.ClickTarget(e.Config.AppConfig.SearchButton)
-			e.Log("未知页面 → 点搜索")
+			e.Log("未知页面 → 不操作，等待页面稳定")
 		}
 		time.Sleep(2 * time.Second)
 	}

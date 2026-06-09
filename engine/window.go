@@ -63,6 +63,7 @@ const (
 	WM_LBUTTONUP   = 0x0202
 	WM_KEYDOWN     = 0x0100
 	WM_KEYUP       = 0x0101
+	WM_CHAR        = 0x0102
 	VK_ESCAPE      = 0x1B
 	SRCCOPY        = 0x00CC0020
 	PW_CLIENTONLY  = 1
@@ -200,6 +201,12 @@ func ClickAt(hwnd uintptr, x, y int) {
 func PressKey(hwnd uintptr, keyCode int) {
 	procPostMessageW.Call(hwnd, WM_KEYDOWN, uintptr(keyCode), 0)
 	procPostMessageW.Call(hwnd, WM_KEYUP, uintptr(keyCode), 0)
+}
+
+func TypeText(hwnd uintptr, text string) {
+	for _, ch := range text {
+		procPostMessageW.Call(hwnd, WM_CHAR, uintptr(ch), 0)
+	}
 }
 
 // CaptureWindow 截图目标窗口
