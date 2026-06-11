@@ -15,25 +15,29 @@ import (
 
 // ========== Windows API ==========
 var (
-	user32   = syscall.NewLazyDLL("user32.dll")
-	gdi32    = syscall.NewLazyDLL("gdi32.dll")
+	user32 = syscall.NewLazyDLL("user32.dll")
+	gdi32  = syscall.NewLazyDLL("gdi32.dll")
 
 	pw = user32.NewProc
 	_  = gdi32.NewProc
 )
 
 var (
-	procFindWindowW      = user32.NewProc("FindWindowW")
-	procEnumWindows      = user32.NewProc("EnumWindows")
-	procGetWindowTextW   = user32.NewProc("GetWindowTextW")
-	procGetClassNameW    = user32.NewProc("GetClassNameW")
-	procGetWindowRect    = user32.NewProc("GetWindowRect")
-	procGetClientRect    = user32.NewProc("GetClientRect")
-	procIsWindowVisible  = user32.NewProc("IsWindowVisible")
-	procGetDC            = user32.NewProc("GetDC")
-	procReleaseDC        = user32.NewProc("ReleaseDC")
-	procPrintWindow      = user32.NewProc("PrintWindow")
-	procPostMessageW     = user32.NewProc("PostMessageW")
+	procFindWindowW     = user32.NewProc("FindWindowW")
+	procEnumWindows     = user32.NewProc("EnumWindows")
+	procGetWindowTextW  = user32.NewProc("GetWindowTextW")
+	procGetClassNameW   = user32.NewProc("GetClassNameW")
+	procGetWindowRect   = user32.NewProc("GetWindowRect")
+	procGetClientRect   = user32.NewProc("GetClientRect")
+	procIsWindowVisible = user32.NewProc("IsWindowVisible")
+	procGetDC           = user32.NewProc("GetDC")
+	procReleaseDC       = user32.NewProc("ReleaseDC")
+	procPrintWindow     = user32.NewProc("PrintWindow")
+	procSetCursorPos    = user32.NewProc("SetCursorPos")
+	procMouseEvent      = user32.NewProc("mouse_event")
+	procSendInput       = user32.NewProc("SendInput")
+	procGetMessageExtraInfo = user32.NewProc("GetMessageExtraInfo")
+
 	procCreateCompatibleDC     = gdi32.NewProc("CreateCompatibleDC")
 	procDeleteDC               = gdi32.NewProc("DeleteDC")
 	procCreateCompatibleBitmap = gdi32.NewProc("CreateCompatibleBitmap")
@@ -48,25 +52,54 @@ type HDC uintptr
 type HBITMAP uintptr
 
 type WinRect struct{ Left, Top, Right, Bottom int32 }
+
 type BITMAPINFOHEADER struct {
-	BiSize, BiWidth, BiHeight int32
-	BiPlanes, BiBitCount      uint16
-	BiCompression, BiSizeImage uint32
+	BiSize, BiWidth, BiHeight     int32
+	BiPlanes, BiBitCount          uint16
+	BiCompression, BiSizeImage    uint32
 	BiXPelsPerMeter, BiYPelsPerMeter int32
-	BiClrUsed, BiClrImportant uint32
+	BiClrUsed, BiClrImportant     uint32
 }
 type BITMAPINFO struct{ BmiHeader BITMAPINFOHEADER }
 
+// INPUT for SendInput
+type MOUSEINPUT struct {
+	X, Y     int32
+	MouseData uint32
+	Flags     uint32
+	Time      uint32
+	ExtraInfo uintptr
+}
+type KEYBDINPUT struct {
+	KeyCode     uint16
+	Scan        uint16
+	Flags       uint32
+	Time        uint32
+	ExtraInfo   uintptr
+}
+type INPUT struct {
+	Type  uint32
+	Mi    MOUSEINPUT
+}
+
 const (
-	WM_MOUSEMOVE   = 0x0200
-	WM_LBUTTONDOWN = 0x0201
-	WM_LBUTTONUP   = 0x0202
-	WM_KEYDOWN     = 0x0100
-	WM_KEYUP       = 0x0101
-	WM_CHAR        = 0x0102
-	VK_ESCAPE      = 0x1B
-	SRCCOPY        = 0x00CC0020
-	PW_CLIENTONLY  = 1
+	INPUT_MOUSE    = 0
+	MOUSEEVENTF_MOVE       = 0x0001
+	MOUSEEVENTF_LEFTDOWN   = 0x0002
+	MOUSEEVENTF_LEFTUP     = 0x0004
+	MOUSEEVENTF_ABSOLUTE   = 0x8000
+	MOUSEEVENTF_WHEEL      = 0x0800
+
+	SRCCOPY       = 0x00CC0020
+	PW_CLIENTONLY = 1
+)
+
+const (
+	WM_KEYDOWN = 0x0100
+	WM_KEYUP   = 0x0101
+	WM_CHAR    = 0x0102
+	VK_ESCAPE  = 0x1B
+	VK_BACK    = 0x08
 )
 
 type WinInfo struct {
@@ -74,7 +107,9 @@ type WinInfo struct {
 	Title   string
 	Class   string
 	Visible bool
-	W, H    int
+	ScreenX int // 窗口在屏幕上的绝对X坐标
+	ScreenY int // 窗口在屏幕上的绝对Y坐标
+	W, H    int // 窗口宽高
 }
 
 // getClassName 获取窗口类名
@@ -116,21 +151,21 @@ func FindWeChatWindow() *WinInfo {
 		title := syscall.UTF16ToString(buf[:])
 		cls := getClassName(hwnd)
 
-		// 排除浏览器窗口
 		if isBrowserClass(cls) {
 			return 1
 		}
 
-		// 标题包含"微信" 或 类名是微信类
 		if strings.Contains(title, "微信") || isWeChatClass(cls) {
 			var rect WinRect
 			procGetWindowRect.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&rect)))
 			w, h := int(rect.Right-rect.Left), int(rect.Bottom-rect.Top)
-			if w > 100 && h > 100 { // 过滤掉小控件
+			if w > 100 && h > 100 {
 				found = &WinInfo{
 					HWND:    uintptr(hwnd),
 					Title:   title,
 					Class:   cls,
+					ScreenX: int(rect.Left),
+					ScreenY: int(rect.Top),
 					W:       w,
 					H:       h,
 					Visible: true,
@@ -175,6 +210,8 @@ func FindWindowByTitle(titleParts ...string) *WinInfo {
 						HWND:    uintptr(hwnd),
 						Title:   title,
 						Class:   cls,
+						ScreenX: int(rect.Left),
+						ScreenY: int(rect.Top),
 						W:       w,
 						H:       h,
 						Visible: true,
@@ -189,38 +226,77 @@ func FindWindowByTitle(titleParts ...string) *WinInfo {
 	return found
 }
 
-// ClickAt 向指定窗口发送鼠标点击
+// ScreenClick 系统级鼠标点击（屏幕绝对坐标）
+// 使用 SetCursorPos + SendInput，模拟真实鼠标操作
+func ScreenClick(screenX, screenY int) {
+	// 1. 移动光标到目标位置
+	procSetCursorPos.Call(uintptr(screenX), uintptr(screenY))
+
+	// 2. 构造鼠标事件
+	var inputs [3]INPUT
+
+	// mouse down
+	inputs[0] = INPUT{
+		Type: INPUT_MOUSE,
+		Mi: MOUSEINPUT{
+			X:     0,
+			Y:     0,
+			Flags: MOUSEEVENTF_LEFTDOWN,
+		},
+	}
+	// mouse up
+	inputs[1] = INPUT{
+		Type: INPUT_MOUSE,
+		Mi: MOUSEINPUT{
+			X:     0,
+			Y:     0,
+			Flags: MOUSEEVENTF_LEFTUP,
+		},
+	}
+
+	procSendInput.Call(2, uintptr(unsafe.Pointer(&inputs[0])), unsafe.Sizeof(INPUT{}))
+}
+
+// ClickAt 向窗口发送鼠标点击（窗口内相对坐标 → 屏幕绝对坐标）
+// x, y 是相对于窗口左上角的坐标
 func ClickAt(hwnd uintptr, x, y int) {
-	lParam := uintptr((y << 16) | (x & 0xFFFF))
-	procPostMessageW.Call(hwnd, WM_MOUSEMOVE, 0, lParam)
-	procPostMessageW.Call(hwnd, WM_LBUTTONDOWN, 1, lParam)
-	procPostMessageW.Call(hwnd, WM_LBUTTONUP, 0, lParam)
+	var rect WinRect
+	ret, _, _ := procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
+	if ret == 0 {
+		// GetWindowRect 失败，回退到 PostMessage
+		lParam := uintptr((y << 16) | (x & 0xFFFF))
+		procPostMessageW := user32.NewProc("PostMessageW")
+		procPostMessageW.Call(hwnd, 0x0200, 0, lParam) // WM_MOUSEMOVE
+		procPostMessageW.Call(hwnd, 0x0201, 1, lParam) // WM_LBUTTONDOWN
+		procPostMessageW.Call(hwnd, 0x0202, 0, lParam) // WM_LBUTTONUP
+		return
+	}
+
+	screenX := int(rect.Left) + x
+	screenY := int(rect.Top) + y
+	ScreenClick(screenX, screenY)
 }
 
 // PressKey 向指定窗口发送按键
 func PressKey(hwnd uintptr, keyCode int) {
+	procPostMessageW := user32.NewProc("PostMessageW")
 	procPostMessageW.Call(hwnd, WM_KEYDOWN, uintptr(keyCode), 0)
 	procPostMessageW.Call(hwnd, WM_KEYUP, uintptr(keyCode), 0)
 }
 
 func TypeText(hwnd uintptr, text string) {
+	procPostMessageW := user32.NewProc("PostMessageW")
 	for _, ch := range text {
 		procPostMessageW.Call(hwnd, WM_CHAR, uintptr(ch), 0)
 	}
 }
 
-// CaptureWindow 截图目标窗口
+// CaptureWindow 截图目标窗口（从屏幕DC截取窗口区域）
 func CaptureWindow(hwnd uintptr) (image.Image, error) {
-	dc, _, _ := procGetDC.Call(hwnd)
-	if dc == 0 {
-		return nil, fmt.Errorf("GetDC 失败")
-	}
-	defer procReleaseDC.Call(hwnd, dc)
-
 	var rect WinRect
-	ret, _, _ := procGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
+	ret, _, _ := procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
 	if ret == 0 {
-		procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
+		return nil, fmt.Errorf("GetWindowRect 失败")
 	}
 
 	w := int(rect.Right - rect.Left)
@@ -229,19 +305,55 @@ func CaptureWindow(hwnd uintptr) (image.Image, error) {
 		return nil, fmt.Errorf("窗口尺寸无效: %dx%d", w, h)
 	}
 
-	// 方案一: PrintWindow
-	img, err := capturePW(hwnd, dc, w, h)
+	// 优先从屏幕DC截取窗口区域（最可靠，对小程序也有效）
+	img, err := captureScreenRegion(int(rect.Left), int(rect.Top), w, h)
 	if err == nil && !isBlankImage(img) {
 		return img, nil
 	}
 
-	// 方案二: BitBlt
-	img, err = captureBitBlt(hwnd, w, h)
-	if err == nil && !isBlankImage(img) {
-		return img, nil
+	// 回退：PrintWindow
+	dc, _, _ := procGetDC.Call(hwnd)
+	if dc != 0 {
+		defer procReleaseDC.Call(hwnd, dc)
+		img, err := capturePW(hwnd, dc, w, h)
+		if err == nil && !isBlankImage(img) {
+			return img, nil
+		}
+		img, err = capturePWFull(hwnd, dc, w, h)
+		if err == nil && !isBlankImage(img) {
+			return img, nil
+		}
 	}
 
-	return capturePWFull(hwnd, dc, w, h)
+	return captureScreenRegion(int(rect.Left), int(rect.Top), w, h)
+}
+
+// captureScreenRegion 从屏幕DC截取指定区域
+func captureScreenRegion(x, y, w, h int) (image.Image, error) {
+	screenDC, _, _ := procGetDC.Call(0)
+	if screenDC == 0 {
+		return nil, fmt.Errorf("GetDC(NULL) 失败")
+	}
+	defer procReleaseDC.Call(0, screenDC)
+
+	memDC, _, _ := procCreateCompatibleDC.Call(screenDC)
+	if memDC == 0 {
+		return nil, fmt.Errorf("CreateCompatibleDC 失败")
+	}
+	defer procDeleteDC.Call(memDC)
+
+	bmp, _, _ := procCreateCompatibleBitmap.Call(screenDC, uintptr(w), uintptr(h))
+	if bmp == 0 {
+		return nil, fmt.Errorf("CreateCompatibleBitmap 失败")
+	}
+	defer procDeleteObject.Call(bmp)
+
+	oldBmp, _, _ := procSelectObject.Call(memDC, bmp)
+	defer procSelectObject.Call(memDC, oldBmp)
+
+	procBitBlt.Call(memDC, 0, 0, uintptr(w), uintptr(h), screenDC, uintptr(x), uintptr(y), SRCCOPY)
+
+	return bitmapToImage(HBITMAP(bmp), w, h)
 }
 
 func capturePW(hwnd uintptr, dc uintptr, w, h int) (image.Image, error) {
@@ -264,36 +376,6 @@ func capturePW(hwnd uintptr, dc uintptr, w, h int) (image.Image, error) {
 	if ret == 0 {
 		return nil, fmt.Errorf("PrintWindow 失败")
 	}
-
-	return bitmapToImage(HBITMAP(bmp), w, h)
-}
-
-func captureBitBlt(hwnd uintptr, w, h int) (image.Image, error) {
-	var rect WinRect
-	procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
-
-	screenDC, _, _ := procGetDC.Call(0)
-	if screenDC == 0 {
-		return nil, fmt.Errorf("GetDC(NULL) 失败")
-	}
-	defer procReleaseDC.Call(0, screenDC)
-
-	memDC, _, _ := procCreateCompatibleDC.Call(screenDC)
-	if memDC == 0 {
-		return nil, fmt.Errorf("CreateCompatibleDC 失败")
-	}
-	defer procDeleteDC.Call(memDC)
-
-	bmp, _, _ := procCreateCompatibleBitmap.Call(screenDC, uintptr(w), uintptr(h))
-	if bmp == 0 {
-		return nil, fmt.Errorf("CreateCompatibleBitmap 失败")
-	}
-	defer procDeleteObject.Call(bmp)
-
-	oldBmp, _, _ := procSelectObject.Call(memDC, bmp)
-	defer procSelectObject.Call(memDC, oldBmp)
-
-	procBitBlt.Call(memDC, 0, 0, uintptr(w), uintptr(h), screenDC, uintptr(rect.Left), uintptr(rect.Top), SRCCOPY)
 
 	return bitmapToImage(HBITMAP(bmp), w, h)
 }

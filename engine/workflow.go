@@ -19,6 +19,8 @@ type Engine struct {
 	Config      *WorkflowConfig
 	ConfigPath  string
 	WindowHWND  uintptr
+	ScreenX     int // 窗口在屏幕上的绝对X
+	ScreenY     int // 窗口在屏幕上的绝对Y
 	State       WorkflowState
 	CurrentStep int
 	StepIdx     int
@@ -104,17 +106,18 @@ func (e *Engine) Log(format string, args ...interface{}) {
 	log.Printf("[引擎] %s", msg)
 }
 
-// FindWindow 查找并缓存微信小程序窗口句柄
+// FindWindow 查找并缓存微信小程序窗口句柄及屏幕坐标
 func (e *Engine) FindWindow() error {
-	// 方式一：用类名过滤查找微信窗口
 	win := FindWeChatWindow()
 	if win != nil {
 		e.WindowHWND = win.HWND
-		e.Log("找到窗口: HWND=%x 标题=%s 类名=%s 尺寸=%dx%d", win.HWND, win.Title, win.Class, win.W, win.H)
+		e.ScreenX = win.ScreenX
+		e.ScreenY = win.ScreenY
+		e.Log("找到窗口: HWND=%x 标题=%s 屏幕位置=(%d,%d) 尺寸=%dx%d",
+			win.HWND, win.Title, win.ScreenX, win.ScreenY, win.W, win.H)
 		return nil
 	}
 
-	// 方式二：按标题关键词搜索（排除浏览器）
 	title := e.Config.AppConfig.MiniAppTitle
 	if title == "" {
 		title = "微信"
@@ -123,14 +126,17 @@ func (e *Engine) FindWindow() error {
 		win := FindWindowByTitle(t)
 		if win != nil {
 			e.WindowHWND = win.HWND
-			e.Log("找到窗口(标题): HWND=%x 标题=%s 尺寸=%dx%d", win.HWND, win.Title, win.W, win.H)
+			e.ScreenX = win.ScreenX
+			e.ScreenY = win.ScreenY
+			e.Log("找到窗口(标题): HWND=%x 屏幕位置=(%d,%d) 尺寸=%dx%d",
+				win.HWND, win.ScreenX, win.ScreenY, win.W, win.H)
 			return nil
 		}
 	}
 	return fmt.Errorf("未找到微信小程序窗口")
 }
 
-// Click 向窗口发送点击
+// Click 向窗口发送点击（窗口内相对坐标 → 屏幕绝对坐标）
 func (e *Engine) Click(x, y int) {
 	if e.WindowHWND == 0 {
 		e.FindWindow()
@@ -140,7 +146,7 @@ func (e *Engine) Click(x, y int) {
 		return
 	}
 	ClickAt(e.WindowHWND, x, y)
-	e.Log("点击 (%d,%d)", x, y)
+	e.Log("点击 (%d,%d) → 屏幕(%d,%d)", x, y, e.ScreenX+x, e.ScreenY+y)
 }
 
 // ClickTarget 点击目标
