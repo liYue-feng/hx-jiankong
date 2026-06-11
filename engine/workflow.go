@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -517,7 +518,7 @@ func (e *Engine) stepFindClick(step WorkflowStep) {
 	// 匹配阈值
 	threshold := step.MatchThreshold
 	if threshold <= 0 {
-		threshold = 0.8 // 默认0.8
+		threshold = 0.65 // 默认0.65，适配不同DPI
 	}
 
 	var result *MatchResult
@@ -537,7 +538,13 @@ func (e *Engine) stepFindClick(step WorkflowStep) {
 			}
 		}
 	} else {
-		e.Log("模板匹配失败: %s", step.Image)
+		e.Log("模板匹配失败: %s (阈值=%.2f)", step.Image, threshold)
+		// 保存调试截图
+		debugPath := filepath.Join(filepath.Dir(e.ConfigPath), "screenshots", "debug_match_fail_"+filepath.Base(step.Image))
+		os.MkdirAll(filepath.Dir(debugPath), 0755)
+		if err := SaveImage(img, debugPath); err == nil {
+			e.Log("调试截图已保存: %s", debugPath)
+		}
 		if step.OnNotFound != nil {
 			for _, s := range step.OnNotFound.Steps {
 				e.executeStep(s)

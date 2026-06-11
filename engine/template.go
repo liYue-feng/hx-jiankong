@@ -11,19 +11,52 @@ import (
 
 // MatchResult 模板匹配结果
 type MatchResult struct {
-	CenterX    int     // 匹配区域中心X
-	CenterY    int     // 匹配区域中心Y
-	TopLeftX   int     // 左上角X
-	TopLeftY   int     // 左上角Y
-	Width      int     // 匹配区域宽
-	Height     int     // 匹配区域高
-	Confidence float64 // 置信度 0~1
+	CenterX    int
+	CenterY    int
+	TopLeftX   int
+	TopLeftY   int
+	Width      int
+	Height     int
+	Confidence float64
 }
 
 // MatchTemplate NCC模板匹配，在全图中寻找模板图
-// full: 全屏截图, template: 模板图, threshold: 阈值(0.7~0.95)
-// 返回最佳匹配位置(nil=未找到)
+// 支持多尺度匹配（0.7x~2.0x），适配不同DPI缩放
 func MatchTemplate(full, template image.Image, threshold float64) *MatchResult {
+	// 先尝试原始尺寸
+	result := matchTemplateNCC(full, template, threshold)
+	if result != nil {
+		return result
+	}
+
+	// 多尺度匹配
+	scales := []float64{0.7, 0.8, 0.9, 1.1, 1.2, 1.5, 2.0}
+	tBounds := template.Bounds()
+	tW, tH := tBounds.Dx(), tBounds.Dy()
+
+	for _, scale := range scales {
+		sw := int(float64(tW) * scale)
+		sh := int(float64(tH) * scale)
+		if sw < 10 || sh < 10 || sw > 500 || sh > 500 {
+			continue
+		}
+		scaled := resizeImage(template, sw, sh)
+		result := matchTemplateNCC(full, scaled, threshold)
+		if result != nil {
+			// 把匹配位置映射回原模板尺寸
+			result.Width = tW
+			result.Height = tH
+			result.CenterX = result.CenterX - (sw-tW)/2
+			result.CenterY = result.CenterY - (sh-tH)/2
+			return result
+		}
+	}
+
+	return nil
+}
+
+// matchTemplateNCC 单尺度 NCC 匹配
+func matchTemplateNCC(full, template image.Image, threshold float64) *MatchResult {
 	fBounds := full.Bounds()
 	tBounds := template.Bounds()
 	fW, fH := fBounds.Dx(), fBounds.Dy()
@@ -33,11 +66,9 @@ func MatchTemplate(full, template image.Image, threshold float64) *MatchResult {
 		return nil
 	}
 
-	// 转为灰度数组（连续内存，访问更快）
 	fGray := toGray(full)
 	tGray := toGray(template)
 
-	// 预计算模板均值和方差
 	tLen := tW * tH
 	tPixels := make([]float64, tLen)
 	var tSum float64
@@ -54,12 +85,11 @@ func MatchTemplate(full, template image.Image, threshold float64) *MatchResult {
 	}
 	tStd := math.Sqrt(tVarSum)
 	if tStd < 0.001 {
-		return nil // 模板全是同一颜色，无法匹配
+		return nil
 	}
 
 	maxX, maxY := fW-tW, fH-tH
 
-	// 自适应步进(大模板大步进加快速度,小模板精确扫描)
 	stride := 2
 	if tW > 80 || tH > 80 || maxX > 500 || maxY > 500 {
 		stride = 4
@@ -71,10 +101,8 @@ func MatchTemplate(full, template image.Image, threshold float64) *MatchResult {
 	bestConf := -2.0
 	bestX, bestY := 0, 0
 
-	// 扫描所有位置
 	for sy := 0; sy <= maxY; sy += stride {
 		for sx := 0; sx <= maxX; sx += stride {
-			// 计算当前区域均值
 			var regionSum float64
 			for ty := 0; ty < tH; ty++ {
 				rowOff := (sy+ty)*fW + sx
@@ -84,7 +112,6 @@ func MatchTemplate(full, template image.Image, threshold float64) *MatchResult {
 			}
 			rMean := regionSum / float64(tLen)
 
-			// NCC计算
 			var num, denR, denT float64
 			for ty := 0; ty < tH; ty++ {
 				rowOff := (sy+ty)*fW + sx
@@ -110,7 +137,7 @@ func MatchTemplate(full, template image.Image, threshold float64) *MatchResult {
 		}
 	}
 
-	// 粗扫描后，如果置信度接近阈值，在最佳位置附近精扫
+	// 精扫
 	if bestConf < threshold && bestConf > threshold-0.15 && stride > 1 {
 		searchHalf := stride * 2
 		xStart := max(0, bestX-searchHalf)
@@ -169,8 +196,23 @@ func MatchTemplate(full, template image.Image, threshold float64) *MatchResult {
 	}
 }
 
+// resizeImage 简单近邻缩放
+func resizeImage(img image.Image, newW, newH int) image.Image {
+	bounds := img.Bounds()
+	oldW, oldH := bounds.Dx(), bounds.Dy()
+	dst := image.NewRGBA(image.Rect(0, 0, newW, newH))
+	for y := 0; y < newH; y++ {
+		srcY := y * oldH / newH
+		for x := 0; x < newW; x++ {
+			srcX := x * oldW / newW
+			dst.Set(x, y, img.At(srcX+bounds.Min.X, srcY+bounds.Min.Y))
+		}
+	}
+	return dst
+}
+
 // MatchTemplateRegion 在指定区域内进行模板匹配
-func MatchTemplateRegion(full image.Image, template image.Image, region []int, threshold float64) *MatchResult {
+func MatchTemplateRegion(full, template image.Image, region []int, threshold float64) *MatchResult {
 	cropped := CropImage(full, region[0], region[1], region[2], region[3])
 	result := MatchTemplate(cropped, template, threshold)
 	if result == nil {
@@ -190,9 +232,7 @@ func MatchTemplateRegion(full image.Image, template image.Image, region []int, t
 // LoadTemplate 加载模板图片
 func (e *Engine) LoadTemplate(path string) (image.Image, error) {
 	if !filepath.IsAbs(path) {
-		// 相对于项目根目录(baseDir)解析
 		baseDir := filepath.Dir(e.ConfigPath)
-		// configs/目录上一级是项目根
 		if filepath.Base(baseDir) == "configs" {
 			baseDir = filepath.Dir(baseDir)
 		}
@@ -210,7 +250,6 @@ func (e *Engine) LoadTemplate(path string) (image.Image, error) {
 	return img, nil
 }
 
-// toGray 将 image.Image 转为灰度数组(逐行连续存储)
 func toGray(img image.Image) []uint8 {
 	bounds := img.Bounds()
 	w, h := bounds.Dx(), bounds.Dy()
@@ -219,7 +258,6 @@ func toGray(img image.Image) []uint8 {
 		off := y * w
 		for x := 0; x < w; x++ {
 			r, g, b, _ := img.At(x+bounds.Min.X, y+bounds.Min.Y).RGBA()
-			// 取高8位(0-255)再算亮度: L = 0.299R + 0.587G + 0.114B
 			r8, g8, b8 := int(r>>8), int(g>>8), int(b>>8)
 			lum := (299*r8 + 587*g8 + 114*b8) / 1000
 			if lum > 255 {
